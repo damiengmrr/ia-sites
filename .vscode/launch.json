@@ -3,7 +3,7 @@
     "configurations": [
       {
         "name": "Uvicorn: app",
-        "type": "python",
+        "type": "debugpy",
         "request": "launch",
         "module": "uvicorn",
         "args": ["app:app", "--reload"],

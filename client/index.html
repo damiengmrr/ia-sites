@@ -1,78 +1,451 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>IA Sites — Générateur</title>
-    <link rel="icon" href="data:,">
-    <script defer src="app.js"></script>
-    <style>
-      body{font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif; margin:0; background:#0b1220; color:#e5e7eb}
-      .wrap{max-width:900px; margin:40px auto; padding:0 16px}
-      .card{background:#111827; border:1px solid #1f2937; border-radius:12px; padding:20px}
-      label{display:block; margin:12px 0 6px; font-weight:600}
-      input, textarea{width:100%; background:#0f172a; color:#e5e7eb; border:1px solid #334155; border-radius:8px; padding:10px}
-      .row{display:grid; gap:16px; grid-template-columns:1fr 1fr}
-      button{margin-top:16px; padding:12px 16px; border-radius:8px; border:1px solid #1d4ed8; background:#1e40af; color:#fff; cursor:pointer}
-      button:disabled{opacity:.6; cursor:wait}
-      .muted{color:#9ca3af; font-size:.9rem}
-      .result{margin-top:20px; padding:14px; background:#0f172a; border:1px dashed #334155; border-radius:10px}
-      a{color:#93c5fd}
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <h1>🚀 IA Sites — Générer un site</h1>
-      <p class="muted">Remplis le brief puis clique sur Générer.</p>
-
-      <div class="card">
-        <div class="row">
-          <div>
-            <label>Nom du projet</label>
-            <input id="project_name" placeholder="Ex: Nova Studio" />
-          </div>
-          <div>
-            <label>Ton</label>
-            <input id="tone" value="moderne, pro, minimal, animations douces" />
-          </div>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pridano tech — Outil interne (maquette complète)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: ['class'],
+      theme: {
+        extend: {
+          colors: {
+            brand: { base: '#12C2E9', deep: '#0A2A43' }
+          },
+          boxShadow: { soft: '0 10px 30px rgba(10,42,67,0.08)' }
+        }
+      }
+    }
+  </script>
+  <style>
+    .card{box-shadow:0 12px 30px rgba(10,42,67,.06)}
+    .gradient{background:linear-gradient(135deg,var(--brand,#12C2E9) 0%,#7DE3F6 100%)}
+    .glass{backdrop-filter:saturate(140%) blur(8px);background:rgba(255,255,255,.85)}
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <div class="min-h-screen grid grid-cols-12">
+    <!-- SIDEBAR -->
+    <aside class="col-span-12 md:col-span-3 xl:col-span-2 border-r bg-white glass">
+      <div class="p-6 flex items-center gap-3">
+        <div id="logoPreview" class="h-9 w-9 rounded-xl gradient" aria-hidden></div>
+        <div>
+          <div class="text-sm uppercase tracking-widest text-slate-500">Pridano</div>
+          <div class="text-lg font-semibold text-brand-deep">tech</div>
         </div>
-
-        <div class="row">
-          <div>
-            <label>Couleurs (JSON)</label>
-            <input id="colors" value='["#0ea5e9","#111827","#f8fafc"]' />
-          </div>
-          <div>
-            <label>Pages (JSON)</label>
-            <input id="pages" value='["home"]' />
-          </div>
-        </div>
-
-        <div class="row">
-          <div>
-            <label>Sections (JSON)</label>
-            <input id="features" value='["hero","services","contact"]' />
-          </div>
-          <div>
-            <label>Tech (JSON)</label>
-            <input id="tech" value='["TailwindCSS","vanilla JS"]' />
-          </div>
-        </div>
-
-        <div class="row">
-          <div>
-            <label>Dark mode</label>
-            <input id="dark" value="true" />
-          </div>
-          <div>
-            <label>Modèle Ollama (optionnel)</label>
-            <input id="model" placeholder='Ex: qwen2.5-coder:7b' />
-          </div>
-        </div>
-
-        <button id="btn">Générer</button>
-        <div id="out" class="result" style="display:none"></div>
       </div>
-    </div>
-  </body>
+      <nav class="px-3 space-y-1" id="nav">
+        <button data-view="dashboard" class="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-100 font-medium">Dashboard</button>
+        <button data-view="generate" class="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-100">Générer</button>
+        <button data-view="templates" class="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-100">Templates</button>
+        <button data-view="blocks" class="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-100">Blocs</button>
+        <button data-view="presets" class="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-100">Presets secteur</button>
+        <button data-view="intake" class="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-100">Intake client</button>
+        <button data-view="history" class="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-100">Historique</button>
+        <button data-view="settings" class="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-100">Paramètres</button>
+      </nav>
+      <div class="px-6 mt-6 text-xs text-slate-500">Outil interne — vous & votre associé.</div>
+    </aside>
+    <!-- MAIN -->
+    <main class="col-span-12 md:col-span-9 xl:col-span-10">
+        <header class="sticky top-0 z-10 bg-white glass border-b">
+          <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div>
+              <h1 id="viewTitle" class="text-xl md:text-2xl font-semibold text-brand-deep">Dashboard</h1>
+              <p class="text-sm text-slate-500">Aperçu rapide & accès aux actions récentes.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <label class="text-sm flex items-center gap-2 select-none"><input id="darkToggle" type="checkbox" class="rounded border-slate-300"> Dark</label>
+              <button id="newProject" class="px-3 py-2 rounded-lg bg-brand-base text-white font-medium shadow-soft">Nouveau projet</button>
+            </div>
+          </div>
+        </header>
+        <section id="views" class="max-w-7xl mx-auto px-6 py-6">
+            <!-- DASHBOARD -->
+            <div data-view="dashboard" class="grid grid-cols-12 gap-6">
+              <div class="col-span-12 lg:col-span-7 card bg-white rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-brand-deep mb-3">Démarrer un projet</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <button class="rounded-2xl border p-4 text-left hover:bg-slate-50" data-goto="generate" data-preset="vitrine">Vitrine rapide</button>
+                  <button class="rounded-2xl border p-4 text-left hover:bg-slate-50" data-goto="generate" data-preset="ecom">E‑commerce Stripe</button>
+                  <button class="rounded-2xl border p-4 text-left hover:bg-slate-50" data-goto="generate" data-preset="booking">Réservation</button>
+                  <button class="rounded-2xl border p-4 text-left hover:bg-slate-50" data-goto="generate" data-preset="restaurant">Restaurant</button>
+                </div>
+              </div>
+              <div class="col-span-12 lg:col-span-5 card bg-white rounded-2xl p-6">
+                <h3 class="text-lg font-semibold text-brand-deep">Importer un logo</h3>
+                <input id="logoInput" type="file" accept="image/*" class="mt-3">
+                <p class="mt-2 text-sm text-slate-500">Couleur de marque auto-détectée ➝ applique la palette.</p>
+                <canvas id="logoCanvas" class="hidden"></canvas>
+              </div>
+              <div class="col-span-12 card bg-white rounded-2xl p-6">
+                <h3 class="text-lg font-semibold text-brand-deep">Derniers projets</h3>
+                <ul id="recentList" class="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm"></ul>
+              </div>
+            </div>
+                    <!-- GENERATE -->
+        <div data-view="generate" class="hidden grid grid-cols-12 gap-6">
+            <div class="col-span-12 lg:col-span-6 space-y-6">
+              <div class="card bg-white rounded-2xl p-5">
+                <div class="flex items-center justify-between mb-3"><h2 class="text-lg font-semibold text-brand-deep">Brief</h2><span class="text-xs text-slate-500">Obligatoire</span></div>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                  <input id="client" class="col-span-2 md:col-span-1 rounded-xl border-slate-200" placeholder="Nom du client">
+                  <input id="secteur" class="col-span-2 md:col-span-1 rounded-xl border-slate-200" placeholder="Secteur">
+                  <input id="objectif" class="col-span-2 rounded-xl border-slate-200" placeholder="Objectif (réserver, acheter, contacter)">
+                  <textarea id="ton" rows="3" class="col-span-2 rounded-xl border-slate-200" placeholder="Ton/style (sobre, premium, coloré, minimal)"></textarea>
+                </div>
+              </div>
+              <div class="card bg-white rounded-2xl p-5">
+                <h2 class="text-lg font-semibold text-brand-deep">Pages & sections</h2>
+                <div class="mt-3 grid grid-cols-2 gap-4 text-sm">
+                  <div class="p-4 rounded-xl border">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Pages</div>
+                    <div class="mt-2 grid grid-cols-2 gap-2">
+                      <label class="inline-flex items-center gap-2"><input class="page" type="checkbox" value="Accueil" checked> Accueil</label>
+                      <label class="inline-flex items-center gap-2"><input class="page" type="checkbox" value="Services"> Services</label>
+                      <label class="inline-flex items-center gap-2"><input class="page" type="checkbox" value="Produits"> Produits</label>
+                      <label class="inline-flex items-center gap-2"><input class="page" type="checkbox" value="A propos"> À propos</label>
+                      <label class="inline-flex items-center gap-2"><input class="page" type="checkbox" value="Contact"> Contact</label>
+                      <label class="inline-flex items-center gap-2"><input class="page" type="checkbox" value="Réservation"> Réservation</label>
+                    </div>
+                  </div>
+                  <div class="p-4 rounded-xl border">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Sections</div>
+                    <div class="mt-2 grid grid-cols-2 gap-2">
+                      <label class="inline-flex items-center gap-2"><input class="section" type="checkbox" value="Hero" checked> Hero</label>
+                      <label class="inline-flex items-center gap-2"><input class="section" type="checkbox" value="Grid" checked> Grille cartes</label>
+                      <label class="inline-flex items-center gap-2"><input class="section" type="checkbox" value="Avis"> Avis</label>
+                      <label class="inline-flex items-center gap-2"><input class="section" type="checkbox" value="FAQ"> FAQ</label>
+                      <label class="inline-flex items-center gap-2"><input class="section" type="checkbox" value="CTA"> CTA</label>
+                      <label class="inline-flex items-center gap-2"><input class="section" type="checkbox" value="Footer" checked> Footer</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="card bg-white rounded-2xl p-5">
+                <h2 class="text-lg font-semibold text-brand-deep">Stack & options</h2>
+                <div class="mt-3 grid grid-cols-2 gap-4 text-sm">
+                  <div class="p-4 rounded-xl border">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Front</div>
+                    <label class="block mt-2"><input class="tech" type="radio" name="front" value="HTML+Tailwind" checked> HTML + Tailwind</label>
+                    <label class="block mt-1"><input class="tech" type="radio" name="front" value="Next.js"> Next.js (squelette)</label>
+                  </div>
+                  <div class="p-4 rounded-xl border">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Modules</div>
+                    <label class="block mt-2"><input class="mod" type="checkbox" value="Formulaire"> Formulaire</label>
+                    <label class="block mt-1"><input class="mod" type="checkbox" value="Stripe"> Stripe</label>
+                    <label class="block mt-1"><input class="mod" type="checkbox" value="Réservation"> Réservation</label>
+                  </div>
+                </div>
+                <div class="mt-4 flex items-center justify-between">
+                  <span class="text-sm text-slate-500">Sortie : wireframe + squelette exportable</span>
+                  <div class="flex gap-2">
+                    <button id="btnGenerate" class="px-4 py-2 rounded-xl bg-brand-base text-white font-semibold shadow-soft">Générer</button>
+                    <button id="btnCopy" class="px-4 py-2 rounded-xl border font-semibold">Copier HTML</button>
+                    <button id="btnZip" class="px-4 py-2 rounded-xl bg-slate-900 text-white font-semibold">Exporter ZIP</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-span-12 lg:col-span-6">
+                <div class="card bg-white rounded-2xl overflow-hidden">
+                  <div class="px-5 pt-5 flex items-center justify-between"><h2 class="text-lg font-semibold text-brand-deep">Aperçu</h2></div>
+                  <div class="bg-slate-900 text-slate-100 p-3 text-xs">index.html</div>
+                  <iframe id="preview" class="w-full h-[560px] bg-white"></iframe>
+                </div>
+              </div>
+            </div>
+                    <!-- TEMPLATES -->
+        <div data-view="templates" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              <template id="tplCard">
+                <div class="card bg-white rounded-2xl overflow-hidden">
+                  <div class="h-36 gradient"></div>
+                  <div class="p-4">
+                    <div class="font-semibold">Nom</div>
+                    <p class="text-sm text-slate-500">Description</p>
+                    <div class="mt-3 flex gap-2">
+                      <button class="px-3 py-1.5 rounded-lg border text-sm use-template">Utiliser</button>
+                      <button class="px-3 py-1.5 rounded-lg text-sm bg-slate-900 text-white preview-template">Aperçu</button>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <div id="templatesGrid" class="contents"></div>
+            </div>
+          </div>
+                  <!-- BLOCKS -->
+        <div data-view="blocks" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" id="blocksGrid"></div>
+          </div>
+                  <!-- PRESETS -->
+        <div data-view="presets" class="hidden">
+            <div id="presetsList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+          </div>
+                <!-- INTAKE -->
+                <div data-view="intake" class="hidden">
+                    <div class="card bg-white rounded-2xl p-6 max-w-3xl">
+                      <h2 class="text-lg font-semibold text-brand-deep mb-3">Formulaire intake client</h2>
+                      <div class="grid grid-cols-2 gap-4 text-sm">
+                        <input class="rounded-xl border-slate-200" placeholder="Raison sociale">
+                        <input class="rounded-xl border-slate-200" placeholder="Email de contact">
+                        <input class="rounded-xl border-slate-200" placeholder="Téléphone">
+                        <input class="rounded-xl border-slate-200" placeholder="Adresse / Ville">
+                        <textarea class="col-span-2 rounded-xl border-slate-200" rows="4" placeholder="Textes fournis (about/services)"></textarea>
+                        <input type="file" class="col-span-2" accept="image/*" />
+                      </div>
+                      <div class="mt-4 flex gap-2">
+                        <button class="px-4 py-2 rounded-xl border">Exporter JSON</button>
+                        <button class="px-4 py-2 rounded-xl bg-slate-900 text-white">Télécharger modèle Word</button>
+                      </div>
+                    </div>
+                  </div>
+                        <!-- HISTORY -->
+        <div data-view="history" class="hidden">
+            <div class="card bg-white rounded-2xl p-6">
+              <h2 class="text-lg font-semibold text-brand-deep">Historique</h2>
+              <ul id="historyList" class="mt-3 space-y-2 text-sm"></ul>
+            </div>
+          </div>
+                  <!-- SETTINGS -->
+        <div data-view="settings" class="hidden">
+            <div class="card bg-white rounded-2xl p-6 max-w-3xl">
+              <h2 class="text-lg font-semibold text-brand-deep">Paramètres</h2>
+              <div class="mt-4 grid grid-cols-2 gap-4 text-sm">
+                <label class="block">Couleur marque
+                  <input id="brandColor" type="color" value="#12C2E9" class="block w-24 h-10 mt-1 border rounded" />
+                </label>
+                <label class="block">Police (démo)
+                  <select id="fontSelect" class="block mt-1 rounded border-slate-200">
+                    <option value="system-ui">System</option>
+                    <option value="ui-sans-serif">Sans</option>
+                    <option value="ui-serif">Serif</option>
+                    <option value="ui-monospace">Mono</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+        <footer class="max-w-7xl mx-auto px-6 pb-10 text-xs text-slate-500">© Pridano tech — maquette complète interne.</footer>
+    </main>
+  </div>
+  <script>
+    // --- Simple router ---
+    const nav = document.getElementById('nav');
+    const views = document.getElementById('views');
+    const title = document.getElementById('viewTitle');
+    function show(view){
+        views.querySelectorAll('[data-view]').forEach(v=>v.classList.add('hidden'));
+        const el = views.querySelector(`[data-view="${view}"]`);
+        if(el){ el.classList.remove('hidden'); title.textContent = view.charAt(0).toUpperCase()+view.slice(1); }
+        nav.querySelectorAll('button').forEach(b=>b.classList.remove('bg-slate-100','font-medium'));
+        nav.querySelector(`[data-view="${view}"]`).classList.add('bg-slate-100','font-medium');
+        location.hash = view;
+      }
+      nav.addEventListener('click',e=>{ if(e.target.closest('button[data-view]')) show(e.target.closest('button').dataset.view) });
+      window.addEventListener('hashchange', ()=> show(location.hash.replace('#','')||'dashboard'));
+          // --- Dark mode ---
+    const darkToggle = document.getElementById('darkToggle');
+    darkToggle.addEventListener('change', ()=>{ document.documentElement.classList.toggle('dark'); document.body.classList.toggle('bg-slate-900'); document.body.classList.toggle('text-slate-100'); });
+        // --- Logo color extraction ---
+        const logoInput = document.getElementById('logoInput');
+        const logoCanvas = document.getElementById('logoCanvas');
+        const brandColor = document.getElementById('brandColor');
+        const logoPreview = document.getElementById('logoPreview');
+        function setBrandColor(hex){
+            document.documentElement.style.setProperty('--brand', hex);
+            brandColor.value = hex;
+            logoPreview.style.background = `linear-gradient(135deg,${hex} 0%, #7DE3F6 100%)`;
+          }
+          logoInput?.addEventListener('change', ()=>{
+            const file = logoInput.files?.[0]; if(!file) return;
+            const img = new Image(); img.onload = ()=>{
+              const ctx = logoCanvas.getContext('2d'); logoCanvas.width = img.width; logoCanvas.height = img.height; ctx.drawImage(img,0,0);
+              const data = ctx.getImageData(0,0,img.width,img.height).data; let r=0,g=0,b=0,count=0;
+              for(let i=0;i<data.length;i+=40){ r+=data[i]; g+=data[i+1]; b+=data[i+2]; count++; }
+              r=Math.round(r/count); g=Math.round(g/count); b=Math.round(b/count);
+              const hex = '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
+              setBrandColor(hex);
+            }; img.src = URL.createObjectURL(file);
+          });
+          brandColor?.addEventListener('input', e=> setBrandColor(e.target.value));
+
+          // --- Data (templates, blocks, presets) ---
+          const TEMPLATES = [
+            { id:'vitrine', name:'Vitrine simple', desc:'Hero + sections + contact', sections:['Hero','Grid','CTA','Footer'] },
+            { id:'ecom', name:'E‑commerce', desc:'Hero + produits + checkout', sections:['Hero','Grid','CTA','Footer'] },
+            { id:'booking', name:'Réservation', desc:'Hero + services + prise de rdv', sections:['Hero','Grid','FAQ','CTA','Footer'] },
+            { id:'restaurant', name:'Restaurant', desc:'Menu + avis + réservation', sections:['Hero','Grid','Avis','CTA','Footer'] }
+          ];
+      
+          const BLOCKS = [
+            { id:'hero', name:'Hero', html:`<header class='gradient text-white'><div class='max-w-5xl mx-auto px-6 py-12'><h1 class='text-4xl font-bold'>Titre impactant</h1><p class='mt-2 max-w-2xl text-white/90'>Sous‑titre clair et simple.</p><div class='mt-6 flex gap-3'><a class='px-5 py-3 bg-white text-slate-900 rounded-xl font-semibold'>CTA principal</a><a class='px-5 py-3 border border-white/50 rounded-xl'>En savoir plus</a></div></div></header>`},
+            { id:'grid', name:'Grille cartes', html:`<section class='max-w-5xl mx-auto px-6 py-12'><h2 class='text-xl font-semibold mb-4'>Nos services</h2><div class='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>${Array.from({length:6}).map(()=>`<div class='p-5 bg-white rounded-2xl shadow'><div class='h-32 bg-slate-100 rounded-lg mb-3'></div><div class='h-4 bg-slate-200 rounded w-4/5 mb-2'></div><div class='h-4 bg-slate-200 rounded w-2/3'></div></div>`).join('')}</div></section>`},
+            { id:'faq', name:'FAQ', html:`<section class='max-w-5xl mx-auto px-6 pb-12'><h2 class='text-xl font-semibold mb-4'>FAQ</h2><div class='space-y-3'><details class='bg-white rounded-xl p-4 shadow'><summary class='font-medium'>Question 1</summary><p class='text-slate-600 mt-2'>Réponse.</p></details><details class='bg-white rounded-xl p-4 shadow'><summary class='font-medium'>Question 2</summary><p class='text-slate-600 mt-2'>Réponse.</p></details></div></section>`},
+            { id:'cta', name:'CTA', html:`<section class='max-w-5xl mx-auto px-6 py-12 text-center'><h2 class='text-2xl font-semibold'>Prêt à démarrer ?</h2><a class='inline-block mt-4 px-6 py-3 bg-slate-900 text-white rounded-xl'>Nous contacter</a></section>`},
+            { id:'footer', name:'Footer', html:`<footer class='border-t'><div class='max-w-5xl mx-auto px-6 py-8 text-sm text-slate-500'>© Votre marque</div></footer>`}
+          ];
+      
+          const PRESETS = [
+            { id:'coiffeur', name:'Coiffeur à Montpellier', brief:{secteur:'Coiffeur', objectif:'Réserver', ton:'Sobre, local, photos avant/après'}, template:'booking' },
+            { id:'restaurant', name:'Restaurant méditerranéen', brief:{secteur:'Restaurant', objectif:'Réserver', ton:'Chaleureux, appétissant'}, template:'restaurant' },
+            { id:'coach', name:'Coach sportif', brief:{secteur:'Coaching', objectif:'Réserver', ton:'Énergique, dynamique'}, template:'booking' },
+            { id:'sneakers', name:'Boutique sneakers', brief:{secteur:'E‑commerce', objectif:'Acheter', ton:'Minimal, noir & blanc'}, template:'ecom' }
+          ];
+      
+          // --- Render helpers ---
+          function q(sel,root=document){ return root.querySelector(sel) }
+          function qa(sel,root=document){ return Array.from(root.querySelectorAll(sel)) }
+      
+          // Templates view
+          const templGrid = document.getElementById('templatesGrid');
+          const tplCard = document.getElementById('tplCard');
+          function renderTemplates(){
+            templGrid.innerHTML='';
+            TEMPLATES.forEach(t=>{
+              const c = tplCard.content.cloneNode(true);
+              c.querySelector('.font-semibold').textContent = t.name;
+              c.querySelector('p').textContent = t.desc;
+              c.querySelector('.use-template').addEventListener('click',()=>applyTemplate(t.id));
+              c.querySelector('.preview-template').addEventListener('click',()=>{
+                applyTemplate(t.id); generate(); show('generate');
+              });
+              templGrid.appendChild(c);
+            });
+          }
+
+    // Blocks view
+    const blocksGrid = document.getElementById('blocksGrid');
+    function renderBlocks(){
+      blocksGrid.innerHTML='';
+      BLOCKS.forEach(b=>{
+        const card = document.createElement('div');
+        card.className='card bg-white rounded-2xl p-4';
+        card.innerHTML = `<div class='font-semibold mb-2'>${b.name}</div><div class='h-24 gradient rounded-lg mb-3'></div><div class='flex gap-2'><button class='px-3 py-1.5 rounded-lg border text-sm'>Insérer</button><button class='px-3 py-1.5 rounded-lg text-sm bg-slate-900 text-white'>Aperçu</button></div>`;
+        card.querySelector('button').onclick=()=>insertBlock(b.id);
+        card.querySelectorAll('button')[1].onclick=()=>{ currentSections.push(b.name); updatePreviewHTML(assemble()); };
+        blocksGrid.appendChild(card);
+      })
+    }
+
+    // Presets view
+    const presetsList = document.getElementById('presetsList');
+    function renderPresets(){
+      presetsList.innerHTML='';
+      PRESETS.forEach(p=>{
+        const d=document.createElement('div'); d.className='card bg-white rounded-2xl p-4';
+        d.innerHTML=`<div class='font-semibold'>${p.name}</div><div class='text-sm text-slate-500'>${p.brief.secteur} • ${p.brief.objectif}</div><div class='mt-3'><button class='px-3 py-1.5 rounded-lg bg-brand-base text-white'>Appliquer</button></div>`;
+        d.querySelector('button').onclick=()=>{ q('#secteur').value=p.brief.secteur; q('#objectif').value=p.brief.objectif; q('#ton').value=p.brief.ton; applyTemplate(p.template); show('generate') };
+        presetsList.appendChild(d);
+      })
+    }
+
+    // Recent projects / history
+    const recentList = document.getElementById('recentList');
+    const historyList = document.getElementById('historyList');
+    const HISTORY = [];
+    function pushHistory(name){ HISTORY.unshift({ name, at: new Date().toLocaleString() }); renderHistory(); }
+    function renderHistory(){
+      historyList.innerHTML=''; recentList.innerHTML='';
+      HISTORY.slice(0,6).forEach(h=>{
+        const li = document.createElement('li'); li.textContent=`${h.name} — ${h.at}`; historyList.appendChild(li);
+        const ci = document.createElement('li'); ci.className='rounded-xl border p-3'; ci.textContent=h.name; recentList.appendChild(ci);
+      })
+    }
+
+    // --- Generate preview ---
+    const iframe = document.getElementById('preview');
+    const btnGenerate = document.getElementById('btnGenerate');
+    const btnCopy = document.getElementById('btnCopy');
+    const btnZip = document.getElementById('btnZip');
+
+    let currentTemplate = 'vitrine';
+    let currentSections = ['Hero','Grid','Footer'];
+
+    function applyTemplate(id){
+      currentTemplate = id; const t = TEMPLATES.find(x=>x.id===id); if(!t) return; currentSections = [...t.sections];
+      qa('.section').forEach(ch=> ch.checked = currentSections.includes(ch.value));
+    }
+
+    function insertBlock(id){
+      const b = BLOCKS.find(x=>x.id===id); if(!b) return; // add at end
+      if(id==='hero' && !currentSections.includes('Hero')) currentSections.push('Hero');
+      if(id==='grid' && !currentSections.includes('Grid')) currentSections.push('Grid');
+      if(id==='faq' && !currentSections.includes('FAQ')) currentSections.push('FAQ');
+      if(id==='cta' && !currentSections.includes('CTA')) currentSections.push('CTA');
+      if(id==='footer' && !currentSections.includes('Footer')) currentSections.push('Footer');
+      qa('.section').forEach(ch=> ch.checked = currentSections.includes(ch.value));
+      updatePreviewHTML(assemble());
+    }
+
+    function htmlEsc(str){return String(str||'').replace(/[&<>]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[s]))}
+
+    function assemble(){
+      const client = q('#client').value.trim() || 'Projet sans nom';
+      const secteur = q('#secteur').value.trim() || 'Votre activité';
+      const objectif = q('#objectif').value.trim() || 'Appel à l\'action';
+      const ton = q('#ton').value.trim() || 'Sous‑titre descriptif court.';
+      const pages = qa('.page:checked').map(i=>i.value);
+      const modules = qa('.mod:checked').map(i=>i.value);
+      const front = (q('input[name="front"]:checked')||{}).value || 'HTML+Tailwind';
+
+      const m = Object.fromEntries(BLOCKS.map(b=>[b.name,b.html]));
+      const hero = currentSections.includes('Hero') ? m['Hero'] : '';
+      const grid = currentSections.includes('Grid') ? m['Grille cartes'] : '';
+      const faq = currentSections.includes('FAQ') ? m['FAQ'] : '';
+      const cta = currentSections.includes('CTA') ? m['CTA'] : '';
+      const footer = currentSections.includes('Footer') ? m['Footer'] : '';
+
+      const heroFilled = hero
+        .replace('Titre impactant', htmlEsc(secteur))
+        .replace('Sous‑titre clair et simple.', htmlEsc(ton))
+        .replace('CTA principal', htmlEsc(objectif));
+
+      const html = `<!DOCTYPE html><html lang='fr'><head>
+        <meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>
+        <link href='https://cdn.jsdelivr.net/npm/tailwindcss@3.4.12/dist/tailwind.min.css' rel='stylesheet'>
+        <style>:root{--brand:${getComputedStyle(document.documentElement).getPropertyValue('--brand')||'#12C2E9'}} .gradient{background:linear-gradient(135deg,var(--brand) 0%,#7DE3F6 100%)}</style>
+        <title>${htmlEsc(client)}</title>
+      </head>
+      <body class='bg-slate-50 text-slate-900'>
+        ${hero?heroFilled:''}
+        ${grid||''}
+        <section class='max-w-5xl mx-auto px-6 py-12'><h2 class='text-xl font-semibold mb-2'>Infos</h2><p class='text-slate-600'>Pages : ${pages.join(', ')||'—'} • Modules : ${modules.join(', ')||'—'} • Stack : ${htmlEsc(front)}</p></section>
+        ${faq||''}
+        ${cta||''}
+        ${footer||''}
+      </body></html>`;
+      return { html, name: client.replace(/[^a-z0-9-_ ]/gi,'').trim() || 'site' };
+    }
+
+    function updatePreviewHTML({html}){
+      const doc = iframe.contentWindow.document; doc.open(); doc.write(html); doc.close();
+    }
+
+    function generate(){ const out = assemble(); updatePreviewHTML(out); pushHistory(out.name); btnCopy.onclick=()=>{ navigator.clipboard.writeText(out.html); btnCopy.textContent='Copié ✔'; setTimeout(()=>btnCopy.textContent='Copier HTML',1200) } }
+
+    btnGenerate?.addEventListener('click', generate);
+
+    // ZIP export
+    btnZip?.addEventListener('click', async ()=>{
+      const { html, name } = assemble();
+      const zip = new JSZip();
+      zip.file('index.html', html);
+      zip.file('README.txt', `Projet généré par l'outil interne Pridano\n- Nom: ${name}\n- Date: ${new Date().toLocaleString()}\n\nConseils:\n1) Remplacez les textes, images et liens.\n2) Ajoutez vos scripts si besoin.\n3) Déployez sur Netlify/Vercel.`);
+      const blob = await zip.generateAsync({type:'blob'}); saveAs(blob, `${name||'site'}.zip`);
+    });
+
+    // Navigation helpers
+    document.getElementById('newProject')?.addEventListener('click', ()=> show('generate'));
+    document.querySelectorAll('[data-goto]')?.forEach(b=> b.addEventListener('click',()=>{ applyTemplate(b.dataset.preset); show(b.dataset.goto) }))
+
+    // Init
+    renderTemplates(); renderBlocks(); renderPresets(); renderHistory();
+    show(location.hash.replace('#','')||'dashboard');
+  </script>
+</body>
 </html>
