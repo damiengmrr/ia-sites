@@ -1,159 +1,158 @@
-import os, re, json, time
-from typing import List, Dict, Any
-
-import requests
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
+from typing import List, Optional
+import os, re, time, requests
 
-# ---- Config ----
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "qwen2.5-coder:7b"  # ou "llama3.1:8b"
+app = FastAPI(title="Pridano Generator")
 
-# ---- FastAPI ----
-app = FastAPI(title="IA Sites (Ollama + FastAPI)")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True,
-    allow_methods=["*"], allow_headers=["*"],
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Servir les sorties et le mini front
-os.makedirs("runs", exist_ok=True)
-app.mount("/runs", StaticFiles(directory="runs"), name="runs")
+RUNS_DIR = os.path.join(os.getcwd(), "runs")
+os.makedirs(RUNS_DIR, exist_ok=True)
+app.mount("/runs", StaticFiles(directory=RUNS_DIR), name="runs")
 
-# ---- Brief ----
-class Brief(BaseModel):
-    project_name: str
-    brand_colors: List[str] = ["#0ea5e9", "#111827", "#f8fafc"]
-    tone: str = "moderne, pro, minimal, animations douces"
-    pages: List[str] = ["home"]
-    features: List[str] = ["hero", "services", "contact"]
-    tech: List[str] = ["TailwindCSS", "vanilla JS"]
-    dark_mode: bool = True
-    model: str | None = None  # pour changer de modèle à la volée
+# Expose the project folder statically at /static
+app.mount("/static", StaticFiles(directory=".", html=True), name="site")
 
-PROMPT_TEMPLATE = """Tu es un assistant front senior.
-Génère un site complet et propre pour "{name}".
-- Framework CSS: Tailwind (MVP: <script src="https://cdn.tailwindcss.com"></script> dans le HTML).
-- Fichiers séparés: index.html, style.css, script.js.
-- Respecte ces couleurs: {colors}
-- Ton: {tone}
-- Sections: {features}
-- Pages: {pages}
-- Dark mode: {dark}
+# Serve index.html at root, fallback to client/index.html
+@app.get("/")
+def root_index():
+    """
+    Serve index.html if present at project root, otherwise fallback to client/index.html.
+    This fixes the 404 you saw on GET /.
+    """
+    if os.path.exists("index.html"):
+        return FileResponse("index.html")
+    candidate = os.path.join("client", "index.html")
+    if os.path.exists(candidate):
+        return FileResponse(candidate)
+    return JSONResponse({"detail": "index.html introuvable (ni à la racine ni dans client/)"},
+                        status_code=404)
 
-Contraintes:
-- HTML sémantique, meta SEO + OpenGraph, favicon placeholder.
-- Header sticky, footer, menu ancre.
-- Animations CSS (transition/transform), micro-interactions boutons/liens.
-- JS minimal: menu mobile + scroll reveal.
-- Réponds UNIQUEMENT par un JSON valide avec trois clés:
-{{
-  "index.html": "...",
-  "style.css": "...",
-  "script.js": "..."
-}}
-"""
+class GeneratePayload(BaseModel):
+    project_name: str = "Mon Site"
+    tone: str = "moderne"
+    brand_colors: List[str] = ["#12C2E9"]
+    pages: List[str] = ["Accueil","Services","Contact"]
+    features: List[str] = []
+    tech: List[str] = ["HTML+Tailwind"]
+    dark_mode: bool = False
+    model: Optional[str] = None
 
-# ---- Mini "scoring" PyTorch (placeholder simple sans entraînement) ----
-try:
-    import torch
-    import torch.nn as nn
+class AIEDitRequest(BaseModel):
+    html: str
+    prompt: str
+    model: Optional[str] = None
+    ollama_url: Optional[str] = "http://localhost:11434"
 
-    class TinyRater(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.net = nn.Sequential(
-                nn.Linear(3, 32),
-                nn.ReLU(),
-                nn.Linear(32, 1)
-            )
-        def forward(self, x):
-            return self.net(x)
-
-    RATER = TinyRater()
-    RATER.eval()
-
-    def quick_features(index_html: str, style_css: str):
-        has_aria = 1.0 if "aria-" in index_html else 0.0
-        tailwind_density = min(index_html.count('class="') / 200, 1.0)
-        has_contrast_hint = 1.0 if ("text-white" in index_html and "bg-") else 0.0
-        import torch as _t
-        return _t.tensor([[has_aria, tailwind_density, has_contrast_hint]], dtype=_t.float32)
-
-    def score_site(files: Dict[str, str]) -> float:
-        feats = quick_features(files.get("index.html",""), files.get("style.css",""))
-        with torch.no_grad():
-            s = RATER(feats).item()
-        return float(s)
-except Exception:
-    # Si torch indisponible, fallback heuristique
-    def score_site(files: Dict[str, str]) -> float:
-        html = files.get("index.html","")
-        css = files.get("style.css","")
-        score = 0.0
-        if "aria-" in html: score += 0.3
-        score += min(html.count('class="')/400, 0.4)
-        if "text-white" in html and "bg-" in html: score += 0.3
-        return score
-
-# ---- Utils ----
-def ask_ollama(prompt: str, model_name: str, temperature: float = 0.4) -> str:
-    data = {"model": model_name, "prompt": prompt, "stream": False,
-            "options": {"temperature": temperature}}
-    r = requests.post(OLLAMA_URL, json=data, timeout=180)
-    r.raise_for_status()
-    return r.json()["response"]
-
-def extract_files(response_text: str) -> Dict[str, str]:
-    m = re.search(r"\{.*\}", response_text, re.S)
-    if not m:
-        raise ValueError("Pas de JSON détecté dans la réponse du modèle.")
-    return json.loads(m.group(0))
-
-def slugify(text: str) -> str:
-    s = re.sub(r"[^a-zA-Z0-9]+", "-", text.lower()).strip("-")
+def slugify(s: str) -> str:
+    s = s.lower()
+    s = re.sub(r"[^a-z0-9\- ]", "", s)
+    s = re.sub(r"\s+", "-", s).strip("-")
     return s or "site"
 
-def save_run(files: Dict[str,str], run_dir: str) -> None:
-    os.makedirs(run_dir, exist_ok=True)
-    for fname in ["index.html", "style.css", "script.js"]:
-        with open(os.path.join(run_dir, fname), "w", encoding="utf-8") as f:
-            f.write(files.get(fname, ""))
+def assemble_html(p: GeneratePayload) -> str:
+    brand = (p.brand_colors[0] if p.brand_colors else "#12C2E9").strip()
+    hero = f"""<header class='gradient text-white'><div class='max-w-5xl mx-auto px-6 py-12'><h1 class='text-4xl font-bold'>{p.project_name}</h1><p class='mt-2 max-w-2xl text-white/90'>{p.tone}</p><div class='mt-6 flex gap-3'><a class='px-5 py-3 bg-white text-slate-900 rounded-xl font-semibold'>{("Réserver" if "Réservation" in p.features else "Nous contacter")}</a><a class='px-5 py-3 border border-white/50 rounded-xl'>En savoir plus</a></div></div></header>"""
+    grid = """<section class='max-w-5xl mx-auto px-6 py-12'><h2 class='text-xl font-semibold mb-4'>Nos services</h2><div class='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6'>""" + "".join(
+        [f"<div class='p-5 bg-white rounded-2xl shadow'><div class='h-32 bg-slate-100 rounded-lg mb-3'></div><div class='h-4 bg-slate-200 rounded w-4/5 mb-2'></div><div class='h-4 bg-slate-200 rounded w-2/3'></div></div>" for _ in range(6)]
+    ) + "</div></section>"
+    faq = """<section class='max-w-5xl mx-auto px-6 pb-12'><h2 class='text-xl font-semibold mb-4'>FAQ</h2><div class='space-y-3'><details class='bg-white rounded-xl p-4 shadow'><summary class='font-medium'>Question 1</summary><p class='text-slate-600 mt-2'>Réponse.</p></details><details class='bg-white rounded-xl p-4 shadow'><summary class='font-medium'>Question 2</summary><p class='text-slate-600 mt-2'>Réponse.</p></details></div></section>"""
+    cta = """<section class='max-w-5xl mx-auto px-6 py-12 text-center'><h2 class='text-2xl font-semibold'>Prêt à démarrer ?</h2><a class='inline-block mt-4 px-6 py-3 bg-slate-900 text-white rounded-xl'>Nous contacter</a></section>"""
+    footer = """<footer class='border-t'><div class='max-w-5xl mx-auto px-6 py-8 text-sm text-slate-500'>© Votre marque</div></footer>"""
 
-# ---- Route principale ----
+    sections = [hero, grid, faq, cta, footer]
+    html = f"""<!DOCTYPE html><html lang='fr'><head>
+      <meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>
+      <link href='https://cdn.jsdelivr.net/npm/tailwindcss@3.4.12/dist/tailwind.min.css' rel='stylesheet'>
+      <style>:root{{--brand:{brand}}} .gradient{{background:linear-gradient(135deg,var(--brand) 0%,#7DE3F6 100%)}}</style>
+      <title>{p.project_name}</title>
+    </head>
+    <body class='bg-slate-50 text-slate-900'>
+      {''.join(sections)}
+      <section class='max-w-5xl mx-auto px-6 py-12'><h2 class='text-xl font-semibold mb-2'>Infos</h2><p class='text-slate-600'>Pages : {", ".join(p.pages) or "—"} • Modules : {", ".join(p.features) or "—"} • Stack : {", ".join(p.tech)}</p></section>
+    </body></html>"""
+    return html
+
 @app.post("/generate")
-def generate(brief: Brief, n: int = Query(1, ge=1, le=5)):
-    model_name = brief.model or MODEL
-    prompt = PROMPT_TEMPLATE.format(
-        name=brief.project_name,
-        colors=brief.brand_colors,
-        tone=brief.tone,
-        features=brief.features,
-        pages=brief.pages,
-        dark="oui" if brief.dark_mode else "non",
-    )
+def generate_site(p: GeneratePayload, n: int = 1):
+    folder = f"{int(time.time())}_{slugify(p.project_name)}"
+    out_dir = os.path.join(RUNS_DIR, folder)
+    os.makedirs(out_dir, exist_ok=True)
+    html = assemble_html(p)
+    with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as f:
+        f.write(html)
+    return {"saved_at": f"/runs/{folder}", "best": {"score": 1.0}}
 
-    variants: List[Dict[str, Any]] = []
-    for _ in range(n):
-        raw = ask_ollama(prompt, model_name=model_name)
-        files = extract_files(raw)
-        score = score_site(files)
-        variants.append({"files": files, "score": score})
+def _heuristic_edit(html: str, prompt: str) -> (str, str):
+    log = []
+    low = prompt.lower()
 
-    best = max(variants, key=lambda x: x["score"])
-    ts = time.strftime("%Y%m%d-%H%M%S")
-    run_name = f"{slugify(brief.project_name)}-{ts}"
-    run_dir = os.path.join("runs", run_name)
-    save_run(best["files"], run_dir)
+    # changement couleur (#xxxxxx détecté)
+    m = re.search(r"#([0-9a-f]{3,6})", low)
+    if "couleur" in low or "color" in low:
+        if m:
+            hexc = f"#{m.group(1)}"
+            html = re.sub(r"--brand:\s*#[0-9a-fA-F]{3,6}", f"--brand:{hexc}", html)
+            log.append(f"✔ Couleur de marque -> {hexc}")
+    # ajout FAQ
+    if "faq" in low and "FAQ" not in html:
+        html = html.replace("</body>", """<section class='max-w-5xl mx-auto px-6 pb-12'><h2 class='text-xl font-semibold mb-4'>FAQ</h2><div class='space-y-3'><details class='bg-white rounded-xl p-4 shadow'><summary class='font-medium'>Question 1</summary><p class='text-slate-600 mt-2'>Réponse.</p></details></div></section></body>""")
+        log.append("✔ Section FAQ ajoutée")
+    # ajout CTA
+    if "cta" in low and "Prêt à démarrer" not in html:
+        html = html.replace("</body>", """<section class='max-w-5xl mx-auto px-6 py-12 text-center'><h2 class='text-2xl font-semibold'>Prêt à démarrer ?</h2><a class='inline-block mt-4 px-6 py-3 bg-slate-900 text-white rounded-xl'>Nous contacter</a></section></body>""")
+        log.append("✔ CTA ajouté")
+    # bouton Stripe démo
+    if "stripe" in low and "stripe" not in html.lower():
+        html = html.replace("</body>", """<script>function fakeCheckout(){alert('Stripe (démo)')}</script><section class='max-w-5xl mx-auto px-6 py-12 text-center'><button onclick="fakeCheckout()" class='px-6 py-3 bg-emerald-600 text-white rounded-xl'>Payer avec Stripe (démo)</button></section></body>""")
+        log.append("✔ Bouton Stripe démo inséré")
+    if not log:
+        log.append("ℹ️ Rien de spécifique détecté, aucun changement majeur.")
+    return html, "\n".join(log)
 
-    return {
-        "saved_at": f"/runs/{run_name}",
-        "best": best,
-        "variants": variants
-    }
-    
-# --- Mount du front en dernier pour ne pas intercepter /generate ---
-app.mount("/", StaticFiles(directory="client", html=True), name="client")
+@app.post("/ai/edit")
+def ai_edit(req: AIEDitRequest):
+    # Essaye Ollama si dispo, sinon heuristiques
+    used = "heuristics"
+    html_out, logs = req.html, ""
+    try:
+        if req.ollama_url and req.model:
+            url = req.ollama_url.rstrip("/") + "/api/generate"
+            sys = "Tu es un assistant front-end. Transforme le HTML fourni. Retourne uniquement le HTML final entre balises <HTML_OUTPUT>...</HTML_OUTPUT>."
+            prompt = f"""{sys}
+Demande: {req.prompt}
+HTML:
+<<<HTML
+{req.html}
+HTML>>>"""
+            resp = requests.post(url, json={"model": req.model, "prompt": prompt, "stream": False}, timeout=60)
+            if resp.ok:
+                used = "ollama"
+                txt = resp.json().get("response","")
+                m = re.search(r"<HTML_OUTPUT>(.*)</HTML_OUTPUT>", txt, re.S)
+                if m:
+                    html_out = m.group(1).strip()
+                    logs = "Réponse Ollama utilisée."
+                else:
+                    html_out = txt.strip() or req.html
+                    logs = "Texte Ollama sans balises, pris tel quel."
+            else:
+                logs = f"Ollama non OK: {resp.status_code} {resp.text[:160]}"
+        else:
+            logs = "Ollama non configuré, heuristiques appliquées."
+    except Exception as e:
+        logs = f"Ollama indisponible: {e}. Heuristiques appliquées."
+    if used != "ollama":
+        html_out, more = _heuristic_edit(req.html, req.prompt)
+        logs = (logs + "\n" + more).strip()
+    return {"html": html_out, "log": logs}
